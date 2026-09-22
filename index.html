@@ -1,0 +1,139 @@
+<span class="text-[9px] bg-gray-100 text-gray-500 px-1 rounded">AD</span>
+        </div>
+      `;
+
+      const iframe = document.createElement('iframe');
+      iframe.width = "300";
+      iframe.height = "250";
+      iframe.frameBorder = "0";
+      iframe.scrolling = "no";
+      iframe.srcdoc = '<!DOCTYPE html><html><body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;"><script>atOptions={"key":"49e3997936437b092fef9f1256e4087d","format":"iframe","height":250,"width":300,"params":{}};\x3C/script><script src="https://www.highrevenueformat.com/49e3997936437b092fef9f1256e4087d/invoke.js">\x3C/script></body></html>';
+      
+      card.appendChild(iframe);
+      return card;
+    }
+
+    // রিয়েলটাইমে ডাটা লোড
+    db.ref('news').on('value', snap => {
+      const data = snap.val();
+      const grid = document.getElementById('newsGrid');
+      const breakingTicker = document.getElementById('breakingNewsText');
+      grid.innerHTML = '';
+      allNews = [];
+
+      if (!data) {
+        grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-16">বর্তমানে কোনো খবর নেই। অ্যাডমিন থেকে পোস্ট করুন।</p>';
+        document.getElementById('sliderContainer').classList.add('hidden');
+        return;
+      }
+
+      let breakingList = [];
+
+      Object.keys(data).reverse().forEach(key => {
+        const item = data[key];
+        item.id = key;
+        if (!item.views) item.views = Math.floor(Math.random() * 80) + 120;
+        if (!item.reactions) {
+          item.reactions = { like: 18, love: 12, fire: 7, wow: 3, sad: 1 };
+        }
+        allNews.push(item);
+        if (item.isBreaking) breakingList.push(item.title);
+      });
+
+      // গ্রিডে নিউজ এবং প্রতিটি খবরের ঠিক নিচে বিজ্ঞাপন যোগ করা
+      allNews.forEach((item) => {
+        const totalReactions = (item.reactions.like || 0) + (item.reactions.love || 0) + (item.reactions.fire || 0);
+
+        const card = document.createElement('div');
+        card.className = "bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col hover:shadow-lg transition duration-300";
+        card.innerHTML = `
+          <div class="relative overflow-hidden cursor-pointer" onclick="openReadModal('${item.id}')">
+            <img src="${item.img || ''}" class="w-full h-52 object-cover hover:scale-105 transition duration-500">
+            <span class="absolute top-2 left-2 bg-[#c8102e] text-white text-[11px] font-bold px-2 py-0.5 rounded shadow">তাজা খবর</span>
+          </div>
+          <div class="p-4 flex-grow flex flex-col justify-between">
+            <div>
+              <h4 class="font-bold text-gray-900 text-lg hover:text-[#c8102e] cursor-pointer line-clamp-2 leading-snug" onclick="openReadModal('${item.id}')">${item.title}</h4>
+              <p class="text-gray-600 text-sm mt-2 line-clamp-2">${item.content}</p>
+            </div>
+            <div class="border-t border-gray-100 pt-3 mt-4 flex justify-between items-center text-xs text-gray-500">
+              <span class="flex items-center gap-1"><i class="fa-solid fa-eye text-blue-500"></i> ${item.views} ভিউ</span>
+              <div class="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border" onclick="openReadModal('${item.id}')">
+                <span>👍❤️🔥</span>
+                <span class="font-bold text-gray-700 ml-1">${totalReactions}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+
+        // প্রতিটি খবরের ঠিক নিচেই সরাসরি বড় ব্যানার বিজ্ঞাপন কার্ড যুক্ত হচ্ছে
+        grid.appendChild(createAdCardElement());
+      });
+
+      if (breakingList.length > 0) {
+        breakingTicker.innerText = breakingList.join("  ★★★  ");
+      }
+
+      if (allNews.length > 0) {
+        document.getElementById('sliderContainer').classList.remove('hidden');
+        renderSlide(0);
+      }
+    });
+
+    // মোডাল ওপেন
+    function openReadModal(id) {
+      const item = allNews.find(n => n.id === id);
+      if (!item) return;
+      currentModalNewsId = id;
+
+      const updatedViews = (item.views || 0) + 1;
+      db.ref(`news/${id}`).update({ views: updatedViews });
+
+      document.getElementById('modalImg').src = item.img;
+      document.getElementById('modalTitle').innerText = item.title;
+      document.getElementById('modalContent').innerText = item.content;
+      document.getElementById('modalDate').innerText = new Date(item.timestamp).toLocaleDateString('bn-BD', { month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('modalViews').innerText = updatedViews;
+
+      updateModalReactionUI(item.reactions || {});
+      document.getElementById('readModal').classList.remove('hidden');
+    }
+
+    function updateModalReactionUI(reacts) {
+      document.getElementById('react-count-like').innerText = reacts.like || 0;
+      document.getElementById('react-count-love').innerText = reacts.love || 0;
+      document.getElementById('react-count-fire').innerText = reacts.fire || 0;
+      document.getElementById('react-count-wow').innerText = reacts.wow || 0;
+      document.getElementById('react-count-sad').innerText = reacts.sad || 0;
+    }
+
+    function addReaction(type) {
+      if (!currentModalNewsId) return;
+      const item = allNews.find(n => n.id === currentModalNewsId);
+      if (!item) return;
+
+      if (!item.reactions) item.reactions = { like: 0, love: 0, fire: 0, wow: 0, sad: 0 };
+      item.reactions[type] = (item.reactions[type] || 0) + 1;
+
+      db.ref(`news/${currentModalNewsId}/reactions`).set(item.reactions);
+      updateModalReactionUI(item.reactions);
+    }
+
+    function closeReadModal() { document.getElementById('readModal').classList.add('hidden'); }
+
+    function renderSlide(i) {
+      if (!allNews.length) return;
+      currentSlide = (i + allNews.length) % allNews.length;
+      document.getElementById('sliderImg').src = allNews[currentSlide].img;
+      document.getElementById('sliderTitle').innerText = allNews[currentSlide].title;
+      document.getElementById('sliderViews').innerText = allNews[currentSlide].views || 100;
+      document.getElementById('sliderTitle').onclick = () => openReadModal(allNews[currentSlide].id);
+    }
+
+    function nextSlide() { renderSlide(currentSlide + 1); }
+    function prevSlide() { renderSlide(currentSlide - 1); }
+    setInterval(() => nextSlide(), 5000);
+  </script>
+</body>
+      </html>
